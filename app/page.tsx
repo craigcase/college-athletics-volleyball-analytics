@@ -1,0 +1,2 @@
+import { headers } from 'next/headers';import { redirect } from 'next/navigation';import { getCurrentUserFromHeaders } from '../lib/auth/current-user';import { getActiveProgramForUser } from '../db/repositories/programs';
+export default async function Home(){const h=await headers();const u=getCurrentUserFromHeaders(h);if(!u)redirect('/setup');const p=await getActiveProgramForUser(u.email);redirect(p?'/matches':'/setup');}
