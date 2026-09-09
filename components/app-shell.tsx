@@ -1,5 +1,5 @@
 import Link from 'next/link';
-const nav=[['Matches','/matches',true],['Rotations','#',false],['Players','#',false],['Probability','#',false],['Scouting','#',false],["Coach's Edge",'/coaches-edge',true]] as const;
+const nav=[['Roster','/roster',true],['Schedule','/schedule',true],['Matches','/matches',true],['Rotations','#',false],['Players','#',false],['Probability','#',false],['Scouting','#',false],["Coach's Edge",'/coaches-edge',true]] as const;
 export function AppShell({children,program,current}:{children:React.ReactNode;program:{schoolAbbreviation:string;teamName:string;seasonYear:number;primaryColor:string;accentColor:string};current?:string}){
  return <div className="app-frame" style={{'--program-primary':program.primaryColor,'--program-accent':program.accentColor} as React.CSSProperties}>
   <aside className="sidebar"><div className="brand-lockup"><div className="brand-mark">{program.schoolAbbreviation.slice(0,4)}</div><div><strong>{program.schoolAbbreviation}</strong><span>{program.teamName}</span></div></div>

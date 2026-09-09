@@ -9,8 +9,8 @@ test('ChatGPT auth parser fails closed without identity and decodes percent-enco
   const headers = new Headers({
     'oai-authenticated-user-id': 'user-1',
     'oai-authenticated-user-email': 'coach@example.edu',
-    'oai-authenticated-user-name': 'Pat%20Coach',
-    'oai-authenticated-user-name-encoding': 'percent-encoded-utf-8'
+    'oai-authenticated-user-full-name': 'Pat%20Coach',
+    'oai-authenticated-user-full-name-encoding': 'percent-encoded-utf-8'
   });
   assert.deepEqual(getCurrentUserFromHeaders(headers), { id:'user-1', email:'coach@example.edu', name:'Pat Coach' });
 });
@@ -18,6 +18,8 @@ test('ChatGPT auth parser fails closed without identity and decodes percent-enco
 test('program setup validation accepts required identity and rejects bad colors or blank names', () => {
   assert.equal(validateProgramSetup({ schoolAbbreviation:'VCSU', teamName:'VIKINGS', primaryColor:'#123456', secondaryColor:'#ffffff', accentColor:'#ABCDEF', seasonYear:2026 }).ok, true);
   assert.equal(validateProgramSetup({ schoolAbbreviation:'', teamName:'VIKINGS', primaryColor:'#123456', secondaryColor:'#fff', accentColor:'#ABCDEF', seasonYear:2026 }).ok, false);
+  assert.equal(validateProgramSetup(null).ok, false);
+  assert.equal(validateProgramSetup({}).ok, false);
 });
 
 test('structured XML parser extracts only explicit supported totals and rally context', () => {

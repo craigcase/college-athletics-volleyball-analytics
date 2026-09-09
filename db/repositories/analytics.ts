@@ -5,6 +5,7 @@ import { calculateMatchAnalytics } from '../../lib/analytics/match';
 import { rankMatchFindings } from '../../lib/analytics/findings';
 import { reconcileField } from '../../lib/ingestion/reconcile';
 import type { EvidenceObservation } from '../../lib/ingestion/types';
+import type { StoredMetric } from '../../lib/coaches-edge/types';
 
 const numericFields = ['kills','attack_errors','attack_attempts','assists','aces','service_errors','digs','blocks','reception_errors'] as const;
 
@@ -42,7 +43,7 @@ export async function recalculateMatch(matchId:string):Promise<{canonicalRevisio
   return {canonicalRevision:revision,metricCount:metrics.length,findingCount:findings.length};
 }
 
-export async function getStoredMetrics(matchId:string){const r=await getDb().prepare('SELECT match_id matchId,subject,metric_code metric,value,denominator opportunities,engine_version engineVersion FROM match_metric_results WHERE match_id=? AND canonical_revision=(SELECT canonical_revision FROM matches WHERE id=?)').bind(matchId,matchId).all();return r.results??[];}
+export async function getStoredMetrics(matchId:string):Promise<StoredMetric[]>{const r=await getDb().prepare('SELECT match_id matchId,subject,metric_code metric,value,denominator opportunities,engine_version engineVersion FROM match_metric_results WHERE match_id=? AND canonical_revision=(SELECT canonical_revision FROM matches WHERE id=?)').bind(matchId,matchId).all<StoredMetric>();return r.results??[];}
 
 export async function getMatchSummary(matchId:string){
   const db=getDb();

@@ -9,10 +9,10 @@ const PARSER_VERSION='ingestion-1.0.0';
 export async function importMatchBytes(input:{programId:string;seasonId:string;bytes:Uint8Array;sourceUrl?:string;fileName?:string;contentType?:string;actorEmail:string;ourTeamNames?:string[]}){
   const sourceFamily=detectSourceFamily({fileName:input.fileName,contentType:input.contentType,bytes:input.bytes});
   const source=await preserveSource({...input,sourceFamily,importedBy:input.actorEmail,parserVersion:PARSER_VERSION});
-  if(source.duplicate){
-    const link=await getDb().prepare('SELECT match_id matchId FROM match_source_links WHERE source_artifact_id=? LIMIT 1').bind(source.id).first<{matchId:string}>();
-    return {status:'duplicate' as const,sourceArtifactId:source.id,matchId:link?.matchId};
-  }
+  const link=source.duplicate
+    ? await getDb().prepare('SELECT match_id matchId FROM match_source_links WHERE source_artifact_id=? LIMIT 1').bind(source.id).first<{matchId:string}>()
+    : undefined;
+  if(source.duplicate && link?.matchId) return {status:'duplicate' as const,sourceArtifactId:source.id,matchId:link.matchId};
   const text=new TextDecoder().decode(input.bytes);
   const parsed=parseMatchSource({
     text,

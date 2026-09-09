@@ -1,7 +1,7 @@
 import type { EvidenceObservation } from '../types.js';
 
 export type PublicBoxScoreEvidence = {
-  match: { date?: string; opponentName?: string; homeAway?: 'home' | 'away' | 'neutral' | 'unknown' };
+  match: { date?: string; opponentName?: string; homeAway?: 'home' | 'away' | 'neutral' | 'unknown'; sourceMatchId?: string };
   observations: EvidenceObservation[];
   sourceUrl: string;
 };
@@ -115,6 +115,7 @@ function parseSidearmTables(html: string, ourTeamNames: string[]) {
 }
 
 export function parsePublicBoxScoreHtml(html: string, sourceUrl: string, options: PublicBoxScoreParseOptions = {}): PublicBoxScoreEvidence {
+  const title = cellText(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '');
   const sectionTag = html.match(/<section\b[^>]*data-match-date=["'][^"']+["'][^>]*>/i)?.[0] ?? '';
   const section = attrs(sectionTag);
   const homeAwayRaw = section['data-home-away'];
@@ -123,9 +124,14 @@ export function parsePublicBoxScoreHtml(html: string, sourceUrl: string, options
   if (section['data-match-date']) match.date = section['data-match-date'];
   if (section['data-opponent']) match.opponentName = section['data-opponent'];
   if (homeAway) match.homeAway = homeAway;
+  const sourceMatchId = sourceUrl.match(/\/boxscore\/([^/?#]+)/i)?.[1];
+  if (sourceMatchId) match.sourceMatchId = sourceMatchId;
+  if (!match.opponentName) {
+    const titleOpponent = title.match(/\bvs\.?\s+(.+?)\s+on\s+\d{1,2}\/\d{1,2}\/\d{4}\b/i)?.[1];
+    if (titleOpponent) match.opponentName = titleOpponent.trim();
+  }
 
   if (!match.date) {
-    const title = cellText(html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? '');
     const dateText = title.match(/\bon\s+(\d{1,2}\/\d{1,2}\/\d{4})\b/i)?.[1];
     const parsedDate = dateText ? isoDateFromUsDate(dateText) : undefined;
     if (parsedDate) match.date = parsedDate;
@@ -153,7 +159,8 @@ export function parsePublicBoxScoreHtml(html: string, sourceUrl: string, options
   }
 
   if (observations.length === 0 && options.ourTeamNames?.length) {
-    const sidearm = parseSidearmTables(html, options.ourTeamNames);
+    const siteTeamName = title.match(/-\s*Box Score\s*-\s*(.+)$/i)?.[1]?.trim();
+    const sidearm = parseSidearmTables(html, [...options.ourTeamNames, ...(siteTeamName ? [siteTeamName] : [])]);
     observations.push(...sidearm.observations);
     if (!match.opponentName && sidearm.opponentName) match.opponentName = sidearm.opponentName;
   }
