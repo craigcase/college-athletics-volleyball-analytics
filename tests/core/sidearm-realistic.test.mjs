@@ -135,3 +135,10 @@ test('public box score adapter links a VCSU Sidearm page by game id and recogniz
   assert.equal(evidence.observations.find(o=>o.entityKey==='us'&&o.field==='kills')?.value,29);
   assert.equal(evidence.observations.find(o=>o.entityKey==='opponent'&&o.field==='attack_attempts')?.value,130);
 });
+
+test('canonical season context outranks a misleading page year for visible Sidearm dates', () => {
+  const html=`<title>2099 Volleyball Schedule</title><li class="sidearm-schedule-game" data-game-id="season-context"><div class="sidearm-schedule-game-opponent-date">Aug 21 (Fri)</div><div class="sidearm-schedule-game-opponent-name">Test Opponent</div></li>`;
+  const rows=parseScheduleHtml(html,'https://example.edu/sports/volleyball/schedule',2026);
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].date,'2026-08-21');
+});

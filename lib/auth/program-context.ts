@@ -1,8 +1,9 @@
-import { getActiveProgramForUser } from '../../db/repositories/programs.js';
-import { requireCurrentUser } from './current-user.js';
-export async function requireProgramContext(headers:Headers){
-  const user=requireCurrentUser(headers);
-  const program=await getActiveProgramForUser(user.email);
-  if(!program) throw new Error('PROGRAM_SETUP_REQUIRED');
-  return {user,program};
+import { getActiveProgramForUser } from '../../db/repositories/programs';
+import { requireCurrentUser } from './server-current-user';
+
+export async function requireProgramContext() {
+  const user = await requireCurrentUser();
+  const program = await getActiveProgramForUser(user);
+  if (!program) throw new Error('PROGRAM_SETUP_REQUIRED');
+  return { user, program };
 }

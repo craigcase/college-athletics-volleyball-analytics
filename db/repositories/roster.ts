@@ -1,232 +1,133 @@
-import { getDb } from '../client';
+import { getAdminClient } from '../client';
+import { assertNoError, byId } from '../supabase-utils';
 import { id, nowIso } from '../../lib/ids';
 import type { RosterEvidence } from '../../lib/ingestion/roster/sidearm';
 
-const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const isNumberName = (value: string) => /^\d+$/.test(value.trim());
-type PlayerRow = { id: string; canonical_name: string; profile_url?: string | null };
+const normalize=(value:string)=>value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const isNumberName=(value:string)=>/^\d+$/.test(value.trim());
+type PlayerRow={id:string;canonical_name:string;profile_url?:string|null};
 
-export async function upsertRosterEvidence(input: {
-  programId: string;
-  seasonId: string;
-  teamId: string;
-  players: RosterEvidence[];
-  sourceFamily: string;
-  actorEmail: string;
-  sourceArtifactId: string;
-}) {
-  const db = getDb();
-  const now = nowIso();
-  let created = 0;
-  let updated = 0;
-  let needsReview = 0;
+export async function upsertRosterEvidence(input:{programId:string;seasonId:string;teamId:string;players:RosterEvidence[];sourceFamily:string;actorEmail:string;sourceArtifactId:string}){
+  const db=getAdminClient(),now=nowIso();
+  let created=0,updated=0,needsReview=0;
 
-  for (const player of input.players) {
-    let playerId: string | undefined;
-    let matchedPlayer: PlayerRow | undefined;
+  for(const player of input.players){
+    let playerId:string|undefined;
+    let matchedPlayer:PlayerRow|undefined;
 
-    if (player.sourcePlayerId) {
-      matchedPlayer =
-        (await db
-          .prepare(
-            `SELECT p.id,p.canonical_name,ps.profile_url
-             FROM player_aliases pa
-             JOIN players p ON p.id=pa.player_id
-             JOIN player_seasons ps ON ps.player_id=p.id
-             WHERE pa.source_external_id=? AND ps.program_id=?
-             LIMIT 1`,
-          )
-          .bind(player.sourcePlayerId, input.programId)
-          .first<PlayerRow>()) ?? undefined;
-      playerId = matchedPlayer?.id;
-    }
-
-    // V1's Sidearm adapter stored jersey numbers as names. Limit repair to a
-    // unique numeric-name row in this season so staff-corrected names remain canonical.
-    if (!playerId && player.number) {
-      const candidates = await db
-        .prepare(
-          `SELECT p.id,p.canonical_name,ps.profile_url
-           FROM players p
-           JOIN player_seasons ps ON ps.player_id=p.id
-           WHERE ps.program_id=? AND ps.season_id=? AND ps.jersey_number=?
-             AND p.canonical_name GLOB '[0-9]*'`,
-        )
-        .bind(input.programId, input.seasonId, player.number)
-        .all<PlayerRow>();
-      const repairable = (candidates.results ?? []).filter(
-        (candidate) =>
-          isNumberName(candidate.canonical_name) &&
-          (candidate.canonical_name === player.number ||
-            (!!candidate.profile_url && !!player.profileUrl && candidate.profile_url === player.profileUrl)),
-      );
-      if (repairable.length === 1) {
-        matchedPlayer = repairable[0];
-        playerId = matchedPlayer.id;
+    if(player.sourcePlayerId){
+      const aliasResult=await db.from('player_aliases').select('player_id').eq('source_external_id',player.sourcePlayerId).limit(1).maybeSingle();
+      assertNoError(aliasResult.error,'Find player alias');
+      const alias=aliasResult.data as any;
+      if(alias?.player_id){
+        const [pResult,sResult]=await Promise.all([
+          db.from('players').select('id,canonical_name').eq('id',alias.player_id).maybeSingle(),
+          db.from('player_seasons').select('profile_url').eq('player_id',alias.player_id).eq('program_id',input.programId).limit(1).maybeSingle(),
+        ]);
+        assertNoError(pResult.error,'Read aliased player');assertNoError(sResult.error,'Read aliased player season');
+        if(pResult.data){matchedPlayer={...(pResult.data as any),profile_url:(sResult.data as any)?.profile_url??null};playerId=matchedPlayer.id;}
       }
     }
 
-    if (!playerId) {
-      const rows = await db
-        .prepare(
-          `SELECT p.id,p.canonical_name
-           FROM players p
-           JOIN player_seasons ps ON ps.player_id=p.id
-           WHERE ps.program_id=?`,
-        )
-        .bind(input.programId)
-        .all<PlayerRow>();
-      const matches = (rows.results ?? []).filter((row) => normalize(row.canonical_name) === normalize(player.name));
-      if (matches.length === 1) {
-        matchedPlayer = matches[0];
-        playerId = matchedPlayer.id;
-      } else if (matches.length > 1) {
-        needsReview++;
-        await db
-          .prepare(
-            `INSERT INTO reconciliation_issues
-             (id,program_id,issue_type,entity_type,details_json,status,created_at)
-             VALUES(?,?,?,?,?,'open',?)`,
-          )
-          .bind(
-            id('issue'),
-            input.programId,
-            'ambiguous_player_identity',
-            'player',
-            JSON.stringify({ sourceName: player.name, candidates: matches.map((row) => row.id) }),
-            now,
-          )
-          .run();
-        continue;
+    if(!playerId&&player.number){
+      const seasons=await db.from('player_seasons').select('id,player_id,profile_url').eq('program_id',input.programId).eq('season_id',input.seasonId).eq('jersey_number',player.number);
+      assertNoError(seasons.error,'Find player by jersey number');
+      const seasonRows=(seasons.data??[]) as any[];
+      if(seasonRows.length){
+        const playersResult=await db.from('players').select('id,canonical_name').in('id',seasonRows.map(row=>row.player_id));
+        assertNoError(playersResult.error,'Read jersey candidates');
+        const pMap=byId((playersResult.data??[]) as any[]);
+        const repairable=seasonRows.flatMap(season=>{
+          const candidate=pMap.get(season.player_id) as any;
+          if(!candidate||!isNumberName(candidate.canonical_name))return [];
+          const profileMatches=!!season.profile_url&&!!player.profileUrl&&season.profile_url===player.profileUrl;
+          return candidate.canonical_name===player.number||profileMatches?[{...candidate,profile_url:season.profile_url}]:[];
+        });
+        if(repairable.length===1){matchedPlayer=repairable[0];playerId=matchedPlayer.id;}
       }
     }
 
-    if (!playerId) {
-      playerId = id('player');
-      created++;
-      await db.batch([
-        db.prepare('INSERT INTO players(id,canonical_name,created_at) VALUES(?,?,?)').bind(playerId, player.name, now),
-        db
-          .prepare(
-            'INSERT INTO player_aliases(id,player_id,alias,source_family,source_external_id,created_at) VALUES(?,?,?,?,?,?)',
-          )
-          .bind(id('playeralias'), playerId, player.name, input.sourceFamily, player.sourcePlayerId ?? null, now),
-      ]);
-    } else {
+    if(!playerId){
+      const seasons=await db.from('player_seasons').select('player_id').eq('program_id',input.programId);
+      assertNoError(seasons.error,'Read program player seasons');
+      const ids=[...new Set(((seasons.data??[]) as any[]).map(row=>row.player_id))];
+      if(ids.length){
+        const playersResult=await db.from('players').select('id,canonical_name').in('id',ids);
+        assertNoError(playersResult.error,'Read program players');
+        const matches=((playersResult.data??[]) as any[]).filter(row=>normalize(row.canonical_name)===normalize(player.name));
+        if(matches.length===1){matchedPlayer=matches[0];playerId=matchedPlayer.id;}
+        else if(matches.length>1){
+          needsReview++;
+          const issue=await db.from('reconciliation_issues').insert({id:id('issue'),program_id:input.programId,issue_type:'ambiguous_player_identity',entity_type:'player',details_json:JSON.stringify({sourceName:player.name,candidates:matches.map(row=>row.id)}),status:'open',created_at:now});
+          assertNoError(issue.error,'Create player identity issue');
+          continue;
+        }
+      }
+    }
+
+    if(!playerId){
+      playerId=id('player');created++;
+      const createdPlayer=await db.from('players').insert({id:playerId,canonical_name:player.name,created_at:now});
+      assertNoError(createdPlayer.error,'Create player');
+      const alias=await db.from('player_aliases').insert({id:id('playeralias'),player_id:playerId,alias:player.name,source_family:input.sourceFamily,source_external_id:player.sourcePlayerId??null,created_at:now});
+      assertNoError(alias.error,'Create player alias');
+    }else{
       updated++;
-      const current =
-        matchedPlayer ?? (await db.prepare('SELECT id,canonical_name FROM players WHERE id=?').bind(playerId).first<PlayerRow>());
-      if (current && isNumberName(current.canonical_name)) {
-        await db.prepare('UPDATE players SET canonical_name=? WHERE id=?').bind(player.name, playerId).run();
+      if(!matchedPlayer){
+        const current=await db.from('players').select('id,canonical_name').eq('id',playerId).maybeSingle();assertNoError(current.error,'Read player');matchedPlayer=(current.data as any)??undefined;
       }
-      await db
-        .prepare(
-          'INSERT OR IGNORE INTO player_aliases(id,player_id,alias,source_family,source_external_id,created_at) VALUES(?,?,?,?,?,?)',
-        )
-        .bind(id('playeralias'), playerId, player.name, input.sourceFamily, player.sourcePlayerId ?? null, now)
-        .run();
+      if(matchedPlayer&&isNumberName(matchedPlayer.canonical_name)){
+        const repair=await db.from('players').update({canonical_name:player.name}).eq('id',playerId);assertNoError(repair.error,'Repair player name');
+      }
+      const alias=await db.from('player_aliases').upsert({id:id('playeralias'),player_id:playerId,alias:player.name,source_family:input.sourceFamily,source_external_id:player.sourcePlayerId??null,created_at:now},{onConflict:'player_id,alias',ignoreDuplicates:true});
+      assertNoError(alias.error,'Upsert player alias');
     }
 
-    const season = await db
-      .prepare('SELECT id FROM player_seasons WHERE player_id=? AND season_id=?')
-      .bind(playerId, input.seasonId)
-      .first<{ id: string }>();
-    const playerSeasonId = season?.id ?? id('playerseason');
-    if (season) {
-      const overrides = await db.prepare(`SELECT field_name FROM canonical_overrides
-        WHERE program_id=? AND entity_type='player_season' AND entity_id=?`)
-        .bind(input.programId,season.id).all<{field_name:string}>();
-      const protectedFields = new Set((overrides.results ?? []).map(row => row.field_name));
-      const currentSeason = await db.prepare('SELECT * FROM player_seasons WHERE id=?').bind(season.id).first<Record<string,unknown>>();
-      const canonical = (field:string,column:string,value:string|undefined) =>
-        protectedFields.has(field) || protectedFields.has(column) ? currentSeason?.[column] ?? null : value ?? null;
-      await db
-        .prepare(
-          `UPDATE player_seasons
-           SET jersey_number=?,official_position=?,class_year=?,height=?,hometown=?,previous_school=?,
-               profile_url=COALESCE(profile_url,?),image_url=COALESCE(image_url,?),source_player_id=COALESCE(source_player_id,?)
-           WHERE id=?`,
-        )
-        .bind(
-          canonical('number','jersey_number',player.number),
-          canonical('officialPosition','official_position',player.officialPosition),
-          canonical('classYear','class_year',player.classYear),
-          canonical('height','height',player.height),
-          canonical('hometown','hometown',player.hometown),
-          canonical('previousSchool','previous_school',player.previousSchool),
-          canonical('profileUrl','profile_url',player.profileUrl),
-          canonical('imageUrl','image_url',player.imageUrl),
-          canonical('sourcePlayerId','source_player_id',player.sourcePlayerId),
-          season.id,
-        )
-        .run();
-    } else {
-      await db
-        .prepare(
-          `INSERT INTO player_seasons
-           (id,player_id,program_id,season_id,team_id,jersey_number,official_position,class_year,height,hometown,previous_school,profile_url,image_url,source_player_id,created_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        )
-        .bind(
-          playerSeasonId,
-          playerId,
-          input.programId,
-          input.seasonId,
-          input.teamId,
-          player.number ?? null,
-          player.officialPosition ?? null,
-          player.classYear ?? null,
-          player.height ?? null,
-          player.hometown ?? null,
-          player.previousSchool ?? null,
-          player.profileUrl ?? null,
-          player.imageUrl ?? null,
-          player.sourcePlayerId ?? null,
-          now,
-        )
-        .run();
+    const seasonResult=await db.from('player_seasons').select('*').eq('player_id',playerId).eq('season_id',input.seasonId).maybeSingle();
+    assertNoError(seasonResult.error,'Read player season');
+    const season=seasonResult.data as any;
+    const playerSeasonId=season?.id??id('playerseason');
+    if(season){
+      const overridesResult=await db.from('canonical_overrides').select('field_name').eq('program_id',input.programId).eq('entity_type','player_season').eq('entity_id',season.id);
+      assertNoError(overridesResult.error,'Read player overrides');
+      const protectedFields=new Set(((overridesResult.data??[]) as any[]).map(row=>row.field_name));
+      const canonical=(field:string,column:string,value:string|undefined)=>protectedFields.has(field)||protectedFields.has(column)?season[column]??null:value??null;
+      const updatedSeason=await db.from('player_seasons').update({
+        jersey_number:canonical('number','jersey_number',player.number),official_position:canonical('officialPosition','official_position',player.officialPosition),
+        class_year:canonical('classYear','class_year',player.classYear),height:canonical('height','height',player.height),hometown:canonical('hometown','hometown',player.hometown),
+        previous_school:canonical('previousSchool','previous_school',player.previousSchool),profile_url:season.profile_url??canonical('profileUrl','profile_url',player.profileUrl),
+        image_url:season.image_url??canonical('imageUrl','image_url',player.imageUrl),source_player_id:season.source_player_id??canonical('sourcePlayerId','source_player_id',player.sourcePlayerId),
+      }).eq('id',season.id);
+      assertNoError(updatedSeason.error,'Update player season');
+    }else{
+      const inserted=await db.from('player_seasons').insert({id:playerSeasonId,player_id:playerId,program_id:input.programId,season_id:input.seasonId,team_id:input.teamId,jersey_number:player.number??null,official_position:player.officialPosition??null,class_year:player.classYear??null,height:player.height??null,hometown:player.hometown??null,previous_school:player.previousSchool??null,profile_url:player.profileUrl??null,image_url:player.imageUrl??null,source_player_id:player.sourcePlayerId??null,active:true,created_at:now});
+      assertNoError(inserted.error,'Create player season');
     }
-    const fields = { name: player.name, number: player.number, officialPosition: player.officialPosition,
-      classYear: player.classYear, height: player.height, hometown: player.hometown,
-      previousSchool: player.previousSchool, profileUrl: player.profileUrl,
-      imageUrl: player.imageUrl, sourcePlayerId: player.sourcePlayerId };
-    await db.batch(Object.entries(fields).filter(([,value]) => value !== undefined).map(([field,value]) =>
-      db.prepare(`INSERT INTO evidence_observations
-        (id,program_id,source_artifact_id,entity_type,entity_id,source_entity_key,field_name,value_json,source_confidence,observed_at)
-        SELECT ?,?,?,'player_season',?,?,?,?,0.9,?
-        WHERE NOT EXISTS (SELECT 1 FROM evidence_observations WHERE source_artifact_id=? AND entity_type='player_season' AND entity_id=? AND field_name=?)`)
-        .bind(id('observation'),input.programId,input.sourceArtifactId,playerSeasonId,player.sourcePlayerId??null,
-          field,JSON.stringify(value),now,input.sourceArtifactId,playerSeasonId,field)));
+
+    const fields={name:player.name,number:player.number,officialPosition:player.officialPosition,classYear:player.classYear,height:player.height,hometown:player.hometown,previousSchool:player.previousSchool,profileUrl:player.profileUrl,imageUrl:player.imageUrl,sourcePlayerId:player.sourcePlayerId};
+    const existingObs=await db.from('evidence_observations').select('field_name').eq('source_artifact_id',input.sourceArtifactId).eq('entity_type','player_season').eq('entity_id',playerSeasonId);
+    assertNoError(existingObs.error,'Read roster evidence observations');
+    const existingFields=new Set(((existingObs.data??[]) as any[]).map(row=>row.field_name));
+    const observations=Object.entries(fields).filter(([,value])=>value!==undefined).filter(([field])=>!existingFields.has(field)).map(([field,value])=>({id:id('observation'),program_id:input.programId,source_artifact_id:input.sourceArtifactId,entity_type:'player_season',entity_id:playerSeasonId,source_entity_key:player.sourcePlayerId??null,field_name:field,value_json:JSON.stringify(value),source_confidence:0.9,observed_at:now}));
+    if(observations.length){const obsInsert=await db.from('evidence_observations').insert(observations);assertNoError(obsInsert.error,'Persist roster evidence observations');}
   }
 
-  await db
-    .prepare(
-      'INSERT INTO activity_events(id,program_id,actor_email,action,entity_type,details_json,created_at) VALUES(?,?,?,?,?,?,?)',
-    )
-    .bind(
-      id('activity'),
-      input.programId,
-      input.actorEmail,
-      'roster.imported',
-      'roster',
-      JSON.stringify({ created, updated, needsReview }),
-      now,
-    )
-    .run();
-  return { created, updated, needsReview, total: input.players.length };
+  const activity=await db.from('activity_events').insert({id:id('activity'),program_id:input.programId,actor_email:input.actorEmail,action:'roster.imported',entity_type:'roster',details_json:JSON.stringify({created,updated,needsReview}),created_at:now});
+  assertNoError(activity.error,'Create roster activity');
+  return {created,updated,needsReview,total:input.players.length};
 }
 
-export async function listRoster(programId: string, seasonId: string) {
-  const output = await getDb()
-    .prepare(
-      `SELECT p.id,p.canonical_name name,ps.jersey_number number,ps.official_position officialPosition,
-              ps.class_year classYear,ps.height,ps.hometown,ps.previous_school previousSchool,ps.image_url imageUrl
-       FROM player_seasons ps
-       JOIN players p ON p.id=ps.player_id
-       WHERE ps.program_id=? AND ps.season_id=? AND ps.active=1
-       ORDER BY CASE WHEN ps.jersey_number GLOB '[0-9]*' THEN CAST(ps.jersey_number AS INTEGER) ELSE 999 END,p.canonical_name`,
-    )
-    .bind(programId, seasonId)
-    .all();
-  return output.results ?? [];
+export async function listRoster(programId:string,seasonId:string){
+  const db=getAdminClient();
+  const seasons=await db.from('player_seasons').select('id,player_id,jersey_number,official_position,class_year,height,hometown,previous_school,image_url').eq('program_id',programId).eq('season_id',seasonId).eq('active',true);
+  assertNoError(seasons.error,'List roster seasons');
+  const rows=(seasons.data??[]) as any[];
+  const ids=[...new Set(rows.map(row=>row.player_id))];
+  const players=ids.length?await db.from('players').select('id,canonical_name').in('id',ids):{data:[],error:null};
+  assertNoError((players as any).error,'List roster players');
+  const pMap=byId((((players as any).data??[]) as any[]));
+  return rows.map(row=>({id:row.player_id,name:(pMap.get(row.player_id) as any)?.canonical_name??'Unknown player',number:row.jersey_number,officialPosition:row.official_position,classYear:row.class_year,height:row.height,hometown:row.hometown,previousSchool:row.previous_school,imageUrl:row.image_url})).sort((a,b)=>{
+    const an=/^\d+$/.test(a.number??'')?Number(a.number):999,bn=/^\d+$/.test(b.number??'')?Number(b.number):999;
+    return an-bn||a.name.localeCompare(b.name);
+  });
 }

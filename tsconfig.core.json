@@ -26,6 +26,7 @@
   "exclude": [
     "lib/ingestion/fetch-source.ts",
     "lib/ingestion/storage.ts",
-    "lib/auth/program-context.ts"
+    "lib/auth/program-context.ts",
+    "lib/auth/server-current-user.ts"
   ]
 }

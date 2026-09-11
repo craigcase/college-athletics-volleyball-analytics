@@ -1,0 +1,50 @@
+# Migration Verification — 2026-09-09
+
+This document records what was actually verified before packaging the first Netlify + Supabase migration build.
+
+## Verified in the build workspace
+
+- The portable runtime is standard Next.js App Router, not ChatGPT Sites/Vinext/Cloudflare Workers.
+- Production source paths contain no `@openai/sites`, `@cloudflare`, `cloudflare:workers`, Wrangler, Vinext, or Workerd runtime imports.
+- Supabase Postgres migration contains the 23 canonical/evidence/analytics/audit tables from the Sites/D1 baseline.
+- The private `volleyball-evidence` Storage bucket is created by the migration.
+- Supabase Auth is wired through `@supabase/ssr`; program intelligence remains server-scoped.
+- Raw imported evidence is written to Supabase Storage before canonical parser/repository writes.
+- Roster, schedule, source lineage, match reconciliation, deterministic analytics, and Coach's Edge domain regressions remain covered.
+- The Sidearm schedule adapter accepts an explicit canonical season year and does not depend on the runtime clock when that context is supplied.
+
+## Automated regression gate
+
+Command:
+
+```bash
+npm test
+```
+
+Result at packaging time: **58 tests passed, 0 failed**.
+
+The suite includes real-world VCSU/Sidearm roster, schedule, and public box-score fixtures plus vertical-slice and richer-evidence enrichment tests.
+
+## Static source checks
+
+- `git diff --check`: clean.
+- Production runtime scan: no Sites/Cloudflare runtime references.
+- TypeScript parse/internal type consistency was checked across `app/`, `components/`, `db/`, `lib/`, `proxy.ts`, and `next.config.ts` with local declaration stubs because this build workspace cannot reach the npm registry.
+
+## Integration checks that must run in StackBlitz
+
+This environment cannot install the new Next.js/Supabase dependency tree from npm, so it cannot truthfully verify the dependency-backed commands below. Run them after replacing the GitHub repository contents and refreshing StackBlitz:
+
+```bash
+npm install
+npm test
+npm run typecheck
+npm run build
+npm run dev
+```
+
+The first successful preview without Supabase variables should show the Supabase setup-required login state rather than crash. After Supabase is configured, verify sign-up/sign-in, Program Setup, the real VCSU roster import, the real VCSU schedule import, Match Data ingestion, Match Summary, and Coach's Edge.
+
+## Package-lock note
+
+The former lockfile described the Sites/Cloudflare dependency tree and was intentionally removed. A fresh `npm install` in StackBlitz will create the correct lockfile for the portable Next.js/Supabase runtime; commit that generated `package-lock.json` once installation succeeds.

@@ -1,20 +1,11 @@
-export type CurrentUser = { id?: string; email: string; name?: string };
+export type CurrentUser = { id: string; email: string; name?: string };
+export type SupabaseUserLike = { id: string; email?: string | null; user_metadata?: Record<string, unknown> | null };
 
-export function getCurrentUserFromHeaders(headers: Headers): CurrentUser | null {
-  const email = headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
-  if (!email) return null;
-  const id = headers.get('oai-authenticated-user-id')?.trim() || undefined;
-  const rawName = headers.get('oai-authenticated-user-full-name')?.trim() || undefined;
-  const encoding = headers.get('oai-authenticated-user-full-name-encoding')?.toLowerCase();
-  let name = rawName;
-  if (rawName && encoding === 'percent-encoded-utf-8') {
-    try { name = decodeURIComponent(rawName); } catch { name = rawName; }
-  }
-  return { ...(id ? { id } : {}), email, ...(name ? { name } : {}) };
-}
-
-export function requireCurrentUser(headers: Headers): CurrentUser {
-  const user = getCurrentUserFromHeaders(headers);
-  if (!user) throw new Error('UNAUTHENTICATED');
-  return user;
+export function getCurrentUserFromSupabase(user: SupabaseUserLike | null): CurrentUser | null {
+  const email = user?.email?.trim().toLowerCase();
+  if (!user?.id || !email) return null;
+  const metadata = user.user_metadata ?? {};
+  const candidate = metadata.full_name ?? metadata.name ?? metadata.display_name;
+  const name = typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined;
+  return { id: user.id, email, ...(name ? { name } : {}) };
 }

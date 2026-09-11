@@ -1,0 +1,5 @@
+import { redirect } from 'next/navigation';
+import { getCurrentUser } from '../../lib/auth/server-current-user';
+import { publicSupabaseConfigured } from '../../lib/supabase/config';
+import { AuthForm } from '../../components/auth-form';
+export default async function LoginPage(){if(await getCurrentUser())redirect('/');const configured=publicSupabaseConfigured()&&Boolean(process.env.SUPABASE_SECRET_KEY?.trim());return <main className="setup-page"><section className="setup-copy"><span className="eyebrow">College Athletics Consulting</span><h1>Volleyball intelligence, without the administrative drag.</h1><p>Sign in to your program workspace.</p><div className="principles"><b>FAST.</b><b>EASY.</b><b>EFFICIENT.</b></div></section><section className="setup-card"><div className="step-kicker">Secure Program Access</div>{configured?<AuthForm/>:<div className="empty-panel"><h3>Supabase setup required</h3><p>The app is running. Add the Supabase environment variables from <code>.env.example</code>, then reload to enable sign-in and persistence.</p></div>}</section></main>}

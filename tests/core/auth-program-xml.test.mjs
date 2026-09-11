@@ -1,18 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getCurrentUserFromHeaders } from '../../.core-dist/lib/auth/current-user.js';
+import { getCurrentUserFromSupabase } from '../../.core-dist/lib/auth/current-user.js';
 import { validateProgramSetup } from '../../.core-dist/lib/program/validation.js';
 import { parseStructuredXml } from '../../.core-dist/lib/ingestion/match/xml.js';
 
-test('ChatGPT auth parser fails closed without identity and decodes percent-encoded names only when declared', () => {
-  assert.equal(getCurrentUserFromHeaders(new Headers()), null);
-  const headers = new Headers({
-    'oai-authenticated-user-id': 'user-1',
-    'oai-authenticated-user-email': 'coach@example.edu',
-    'oai-authenticated-user-full-name': 'Pat%20Coach',
-    'oai-authenticated-user-full-name-encoding': 'percent-encoded-utf-8'
+test('Supabase auth mapping fails closed and normalizes verified user identity', () => {
+  assert.equal(getCurrentUserFromSupabase(null), null);
+  assert.deepEqual(getCurrentUserFromSupabase({id:'user-1',email:'Coach@Example.edu',user_metadata:{full_name:'Pat Coach'}}), {
+    id:'user-1', email:'coach@example.edu', name:'Pat Coach'
   });
-  assert.deepEqual(getCurrentUserFromHeaders(headers), { id:'user-1', email:'coach@example.edu', name:'Pat Coach' });
+  assert.equal(getCurrentUserFromSupabase({id:'user-2',email:null,user_metadata:{}}), null);
 });
 
 test('program setup validation accepts required identity and rejects bad colors or blank names', () => {

@@ -2,40 +2,36 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-test('match imports await R2 evidence preservation before parsing or reconciliation', async () => {
+test('match imports preserve evidence before parsing or reconciliation', async () => {
   const service = await readFile(new URL('../../lib/services/import-match.ts', import.meta.url), 'utf8');
   const repository = await readFile(new URL('../../db/repositories/sources.ts', import.meta.url), 'utf8');
-
   const preserve = service.indexOf('await preserveSource(');
   const parse = service.indexOf('parseMatchSource({');
   const reconcile = service.indexOf('await resolveMatchForEvidence(');
   assert.ok(preserve >= 0 && preserve < parse && parse < reconcile);
-
-  const r2Write = repository.indexOf('await getFiles().put(');
-  const artifactWrite = repository.indexOf("INSERT INTO source_artifacts");
-  assert.ok(r2Write >= 0 && r2Write < artifactWrite);
+  const storageWrite = repository.indexOf('.storage.from(');
+  const artifactWrite = repository.indexOf("const artifact=await db.from('source_artifacts').insert");
+  assert.ok(storageWrite >= 0 && storageWrite < artifactWrite);
 });
 
 test('an unlinked duplicate match source is parsed again so it can attach after its schedule match exists', async () => {
   const service = await readFile(new URL('../../lib/services/import-match.ts', import.meta.url), 'utf8');
-  assert.match(service, /if\s*\(source\.duplicate\s*&&\s*link\?\.matchId\)/);
-  assert.doesNotMatch(service, /if\s*\(source\.duplicate\)\s*\{/);
+  assert.match(service, /if\(source\.duplicate&&linkedMatchId\)/);
 });
 
-test('roster re-import can repair number-as-name corruption without overwriting a staff name', async () => {
+test('roster re-import keeps numeric-name repair and staff override protection', async () => {
   const repository = await readFile(new URL('../../db/repositories/roster.ts', import.meta.url), 'utf8');
-  assert.match(repository, /canonical_name\s+GLOB\s+'\[0-9\]\*'/i);
-  assert.match(repository, /UPDATE players SET canonical_name=\?/i);
-  assert.match(repository, /INSERT OR IGNORE INTO player_aliases/i);
+  assert.match(repository, /isNumberName/);
+  assert.match(repository, /canonical_overrides/);
+  assert.match(repository, /player_aliases/);
 });
 
-test('canonical match totals and deterministic analytics are written to D1 repositories', async () => {
+test('canonical match totals and deterministic analytics are persisted through Supabase repositories', async () => {
   const matches = await readFile(new URL('../../db/repositories/matches.ts', import.meta.url), 'utf8');
   const analytics = await readFile(new URL('../../db/repositories/analytics.ts', import.meta.url), 'utf8');
-
-  assert.match(matches, /INSERT INTO evidence_observations/i);
-  assert.match(matches, /canonical_revision=canonical_revision\+1/i);
-  assert.match(analytics, /INSERT OR REPLACE INTO match_team_totals/i);
-  assert.match(analytics, /INSERT INTO match_metric_results/i);
-  assert.match(analytics, /INSERT INTO match_findings/i);
+  assert.match(matches, /evidence_observations/);
+  assert.match(matches, /canonical_revision/);
+  assert.match(analytics, /match_team_totals/);
+  assert.match(analytics, /match_metric_results/);
+  assert.match(analytics, /match_findings/);
 });

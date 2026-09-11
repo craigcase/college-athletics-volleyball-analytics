@@ -2,7 +2,7 @@ import { validateImportUrl } from '../validation/url';
 
 export async function fetchEvidenceUrl(input: string, maxBytes = 25 * 1024 * 1024): Promise<{ url:string; bytes:Uint8Array; contentType:string }> {
   let check = validateImportUrl(input);
-  if (!check.ok) throw new Error(check.reason);
+  if (check.ok === false) throw new Error(check.reason);
   let current = check.url;
   for (let redirect=0; redirect<=5; redirect++) {
     const response = await fetch(current, { redirect:'manual', headers:{ 'user-agent':'College-Athletics-Consulting-Volleyball/1.0' } });
@@ -10,7 +10,7 @@ export async function fetchEvidenceUrl(input: string, maxBytes = 25 * 1024 * 102
       const location=response.headers.get('location');
       if (!location) throw new Error('Source redirect did not provide a destination.');
       check=validateImportUrl(new URL(location,current).toString());
-      if (!check.ok) throw new Error(check.reason);
+      if (check.ok === false) throw new Error(check.reason);
       current=check.url;
       continue;
     }

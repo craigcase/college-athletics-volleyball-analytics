@@ -42,7 +42,8 @@ const classLinkText = (block: string, className: string) => {
   return clean(content?.match(/<a\b[^>]*>([\s\S]*?)<\/a>/i)?.[1]);
 };
 
-const scheduleYear = (html: string, sourceUrl: string) => {
+const scheduleYear = (html: string, sourceUrl: string, seasonYear?: number) => {
+  if (seasonYear) return String(seasonYear);
   const pageText = clean(html.match(/<(?:title|h1|h2)\b[^>]*>([\s\S]*?)<\/(?:title|h1|h2)>/i)?.[1]);
   const fromHeading = pageText?.match(/\b(20\d{2})(?:-\d{2,4})?\s+Volleyball Schedule\b/i)?.[1];
   return fromHeading ?? sourceUrl.match(/\b(20\d{2})\b/)?.[1];
@@ -83,8 +84,8 @@ const scheduleGameBlocks = (html: string) => {
   });
 };
 
-export function parseScheduleHtml(html: string, sourceUrl: string): ScheduleEvidence[] {
-  const year = scheduleYear(html, sourceUrl);
+export function parseScheduleHtml(html: string, sourceUrl: string, seasonYear?: number): ScheduleEvidence[] {
+  const year = scheduleYear(html, sourceUrl, seasonYear);
   const blocks = scheduleGameBlocks(html);
 
   return blocks.flatMap(({ opening, block }) => {
