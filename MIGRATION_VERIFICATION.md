@@ -60,3 +60,11 @@ The first StackBlitz run of v0.2.0 established three migration issues:
 v0.2.1 addresses these by using explicit local candidates for strict narrowing, shipping an inert Vite compatibility tombstone, and forcing Webpack for both `dev` and `build`.
 
 Fresh core verification after these changes: 58 tests passed, 0 failed. Full dependency-backed typecheck/build must be rerun in StackBlitz because this packaging environment cannot download npm dependencies.
+
+
+## StackBlitz compatibility hardening — v0.2.2
+
+- Added `.stackblitzrc` with `startCommand: npm run dev` so StackBlitz does not auto-launch `npx next dev` and accidentally enable Turbopack.
+- `npm run dev` and `npm run build` continue to force Webpack.
+- Added webpack `resolve.extensionAlias` entries in `next.config.ts` so NodeNext-style `.js` specifiers in deterministic TypeScript modules resolve to `.ts`/`.tsx` sources during the Next.js production bundle.
+- Core migration regression test now checks both StackBlitz startup configuration and webpack extension aliases.

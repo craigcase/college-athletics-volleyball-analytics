@@ -17,6 +17,11 @@ test('runtime is standard Next.js + Supabase and no longer depends on Sites/Clou
   assert.equal(pkg.scripts.build, 'next build --webpack');
   assert.equal(pkg.scripts.start, 'next start');
   assert.equal(pkg.scripts.verify, 'npm test && npm run typecheck && npm run build');
+  const stackblitz = JSON.parse(await text('../../.stackblitzrc'));
+  assert.equal(stackblitz.startCommand, 'npm run dev');
+  const nextConfig = await text('../../next.config.ts');
+  assert.match(nextConfig, /extensionAlias/);
+  assert.match(nextConfig, /'\.js': \['\.ts', '\.tsx', '\.js'\]/);
 });
 
 test('Netlify and Supabase migration artifacts exist', async () => {
