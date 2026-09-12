@@ -53,8 +53,14 @@ Netlify supports the Next.js App Router through its OpenNext integration. Connec
 
 ## StackBlitz compatibility
 
-This project intentionally runs Next.js with Webpack in development and production builds (`next dev --webpack` and `next build --webpack`). StackBlitz WebContainers load Next.js through WASM bindings, where Turbopack is unavailable.
+This project is pinned to the maintained Next.js 15.5 backport line. Next 15 uses Webpack by default when `--turbopack` is not requested, which avoids StackBlitz's unavailable native Turbopack bindings and the current Next 16 `workStore` regression.
 
 A small root `vite.config.ts` compatibility tombstone is included only to overwrite any stale ChatGPT Sites/Vite configuration left in an older checkout. The application does not use Vite.
 
 Use `npm run verify` for the full local gate: core tests, TypeScript typecheck, then production build.
+
+## StackBlitz / Next.js 15 compatibility
+
+- Runtime is pinned to `next@15.5.25` because the Next 16 line currently has an open `workStore` AsyncLocalStorage regression that can crash App Router requests/builds in WebContainer and cold-build environments.
+- Next 15 uses `middleware.ts` for Supabase session refresh.
+- StackBlitz starts the app with `npm run dev`; Next 15 uses webpack by default when `--turbopack` is not requested.

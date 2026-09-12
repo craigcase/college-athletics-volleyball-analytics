@@ -72,3 +72,17 @@ Fresh core verification after these changes: 58 tests passed, 0 failed. Full dep
 
 Removed the stale `@import 'tailwindcss';` directive from `app/globals.css`. The migrated UI uses project-owned CSS classes and does not require Tailwind. A regression assertion now prevents reintroducing the orphaned Tailwind dependency.
 
+
+## StackBlitz / Next.js 15 compatibility
+
+- Runtime is pinned to `next@15.5.25` because the Next 16 line currently has an open `workStore` AsyncLocalStorage regression that can crash App Router requests/builds in WebContainer and cold-build environments.
+- Next 15 uses `middleware.ts` for Supabase session refresh.
+- StackBlitz starts the app with `npm run dev`; Next 15 uses webpack by default when `--turbopack` is not requested.
+
+## v0.2.4 Next 16 workStore rollback
+
+- Pins `next@15.5.25` rather than working around the Next 16 AsyncLocalStorage/workStore framework defect in application code.
+- Uses `middleware.ts` for Supabase session refresh, the supported Next 15 convention.
+- `proxy.ts` is now a compatibility shim only.
+- `dev`/`build` use the Next 15 defaults (`next dev`, `next build`), which are Webpack unless `--turbopack` is explicitly requested.
+- Regression tests pin this runtime contract so npm upgrades cannot silently reintroduce the broken Next 16 path.

@@ -7,18 +7,23 @@ const text = async path => readFile(new URL(path, import.meta.url), 'utf8');
 test('runtime is standard Next.js + Supabase and no longer depends on Sites/Cloudflare', async () => {
   const pkg = JSON.parse(await text('../../package.json'));
   const all = {...pkg.dependencies, ...pkg.devDependencies};
-  assert.equal(typeof all.next, 'string');
+  assert.equal(all.next, '15.5.25', 'Next must stay on the maintained 15.5 backport line until the Next 16 workStore regression is fixed');
   assert.equal(typeof all['@supabase/supabase-js'], 'string');
   assert.equal(typeof all['@supabase/ssr'], 'string');
   for (const removed of ['vinext','@openai/sites-vite-plugin','@cloudflare/vite-plugin','@cloudflare/workers-types','wrangler']) {
     assert.equal(all[removed], undefined, `${removed} should be removed`);
   }
-  assert.equal(pkg.scripts.dev, 'next dev --webpack');
-  assert.equal(pkg.scripts.build, 'next build --webpack');
+  assert.equal(pkg.scripts.dev, 'next dev');
+  assert.equal(pkg.scripts.build, 'next build');
   assert.equal(pkg.scripts.start, 'next start');
   assert.equal(pkg.scripts.verify, 'npm test && npm run typecheck && npm run build');
   const stackblitz = JSON.parse(await text('../../.stackblitzrc'));
   assert.equal(stackblitz.startCommand, 'npm run dev');
+  const middleware = await text('../../middleware.ts');
+  assert.match(middleware, /export async function middleware/);
+  assert.match(middleware, /updateSession/);
+  const proxyCompat = await text('../../proxy.ts');
+  assert.match(proxyCompat, /middleware as proxy/); // proxy compatibility shim
   const nextConfig = await text('../../next.config.ts');
   assert.match(nextConfig, /extensionAlias/);
   assert.match(nextConfig, /'\.js': \['\.ts', '\.tsx', '\.js'\]/);
