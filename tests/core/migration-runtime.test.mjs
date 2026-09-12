@@ -22,6 +22,9 @@ test('runtime is standard Next.js + Supabase and no longer depends on Sites/Clou
   const nextConfig = await text('../../next.config.ts');
   assert.match(nextConfig, /extensionAlias/);
   assert.match(nextConfig, /'\.js': \['\.ts', '\.tsx', '\.js'\]/);
+  const globalsCss = await text('../../app/globals.css');
+  assert.doesNotMatch(globalsCss, /@import\s+['\"]tailwindcss['\"]/);
+  assert.equal(all.tailwindcss, undefined, 'Tailwind should not be required by the migrated custom CSS');
 });
 
 test('Netlify and Supabase migration artifacts exist', async () => {

@@ -68,3 +68,7 @@ Fresh core verification after these changes: 58 tests passed, 0 failed. Full dep
 - `npm run dev` and `npm run build` continue to force Webpack.
 - Added webpack `resolve.extensionAlias` entries in `next.config.ts` so NodeNext-style `.js` specifiers in deterministic TypeScript modules resolve to `.ts`/`.tsx` sources during the Next.js production bundle.
 - Core migration regression test now checks both StackBlitz startup configuration and webpack extension aliases.
+## v0.2.3 StackBlitz CSS compatibility
+
+Removed the stale `@import 'tailwindcss';` directive from `app/globals.css`. The migrated UI uses project-owned CSS classes and does not require Tailwind. A regression assertion now prevents reintroducing the orphaned Tailwind dependency.
+
