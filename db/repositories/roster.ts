@@ -25,7 +25,7 @@ export async function upsertRosterEvidence(input:{programId:string;seasonId:stri
           db.from('player_seasons').select('profile_url').eq('player_id',alias.player_id).eq('program_id',input.programId).limit(1).maybeSingle(),
         ]);
         assertNoError(pResult.error,'Read aliased player');assertNoError(sResult.error,'Read aliased player season');
-        if(pResult.data){matchedPlayer={...(pResult.data as any),profile_url:(sResult.data as any)?.profile_url??null};playerId=matchedPlayer.id;}
+        if(pResult.data){const candidate:PlayerRow={...(pResult.data as any),profile_url:(sResult.data as any)?.profile_url??null};matchedPlayer=candidate;playerId=candidate.id;}
       }
     }
 
@@ -43,7 +43,7 @@ export async function upsertRosterEvidence(input:{programId:string;seasonId:stri
           const profileMatches=!!season.profile_url&&!!player.profileUrl&&season.profile_url===player.profileUrl;
           return candidate.canonical_name===player.number||profileMatches?[{...candidate,profile_url:season.profile_url}]:[];
         });
-        if(repairable.length===1){matchedPlayer=repairable[0];playerId=matchedPlayer.id;}
+        if(repairable.length===1){const candidate=repairable[0] as PlayerRow;matchedPlayer=candidate;playerId=candidate.id;}
       }
     }
 
@@ -55,7 +55,7 @@ export async function upsertRosterEvidence(input:{programId:string;seasonId:stri
         const playersResult=await db.from('players').select('id,canonical_name').in('id',ids);
         assertNoError(playersResult.error,'Read program players');
         const matches=((playersResult.data??[]) as any[]).filter(row=>normalize(row.canonical_name)===normalize(player.name));
-        if(matches.length===1){matchedPlayer=matches[0];playerId=matchedPlayer.id;}
+        if(matches.length===1){const candidate=matches[0] as PlayerRow;matchedPlayer=candidate;playerId=candidate.id;}
         else if(matches.length>1){
           needsReview++;
           const issue=await db.from('reconciliation_issues').insert({id:id('issue'),program_id:input.programId,issue_type:'ambiguous_player_identity',entity_type:'player',details_json:JSON.stringify({sourceName:player.name,candidates:matches.map(row=>row.id)}),status:'open',created_at:now});

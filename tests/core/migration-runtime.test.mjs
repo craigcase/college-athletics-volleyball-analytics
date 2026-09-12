@@ -13,9 +13,10 @@ test('runtime is standard Next.js + Supabase and no longer depends on Sites/Clou
   for (const removed of ['vinext','@openai/sites-vite-plugin','@cloudflare/vite-plugin','@cloudflare/workers-types','wrangler']) {
     assert.equal(all[removed], undefined, `${removed} should be removed`);
   }
-  assert.equal(pkg.scripts.dev, 'next dev');
-  assert.equal(pkg.scripts.build, 'next build');
+  assert.equal(pkg.scripts.dev, 'next dev --webpack');
+  assert.equal(pkg.scripts.build, 'next build --webpack');
   assert.equal(pkg.scripts.start, 'next start');
+  assert.equal(pkg.scripts.verify, 'npm test && npm run typecheck && npm run build');
 });
 
 test('Netlify and Supabase migration artifacts exist', async () => {
@@ -29,7 +30,7 @@ test('Netlify and Supabase migration artifacts exist', async () => {
 test('source tree has no production Cloudflare/Sites imports', async () => {
   const candidates = [
     '../../db/client.ts','../../db/repositories/sources.ts','../../lib/auth/server-current-user.ts',
-    '../../app/api/roster/import/route.ts','../../app/api/schedule/import/route.ts'
+    '../../app/api/roster/import/route.ts','../../app/api/schedule/import/route.ts','../../vite.config.ts'
   ];
   for (const path of candidates) {
     const source = await text(path);

@@ -48,3 +48,15 @@ The first successful preview without Supabase variables should show the Supabase
 ## Package-lock note
 
 The former lockfile described the Sites/Cloudflare dependency tree and was intentionally removed. A fresh `npm install` in StackBlitz will create the correct lockfile for the portable Next.js/Supabase runtime; commit that generated `package-lock.json` once installation succeeds.
+
+## StackBlitz verification follow-up — v0.2.1
+
+The first StackBlitz run of v0.2.0 established three migration issues:
+
+- TypeScript strict-mode narrowing in `db/repositories/roster.ts`.
+- A stale Sites-era `vite.config.ts` remaining in the older repository checkout.
+- Next.js Turbopack is unavailable in StackBlitz WebContainers when only WASM bindings load.
+
+v0.2.1 addresses these by using explicit local candidates for strict narrowing, shipping an inert Vite compatibility tombstone, and forcing Webpack for both `dev` and `build`.
+
+Fresh core verification after these changes: 58 tests passed, 0 failed. Full dependency-backed typecheck/build must be rerun in StackBlitz because this packaging environment cannot download npm dependencies.

@@ -50,3 +50,11 @@ Netlify supports the Next.js App Router through its OpenNext integration. Connec
 - `lib/analytics/` — deterministic calculations
 - `db/repositories/` — canonical persistence/reconciliation
 - `tests/core/` — parser, analytics, reconciliation, migration, and vertical-slice regressions
+
+## StackBlitz compatibility
+
+This project intentionally runs Next.js with Webpack in development and production builds (`next dev --webpack` and `next build --webpack`). StackBlitz WebContainers load Next.js through WASM bindings, where Turbopack is unavailable.
+
+A small root `vite.config.ts` compatibility tombstone is included only to overwrite any stale ChatGPT Sites/Vite configuration left in an older checkout. The application does not use Vite.
+
+Use `npm run verify` for the full local gate: core tests, TypeScript typecheck, then production build.

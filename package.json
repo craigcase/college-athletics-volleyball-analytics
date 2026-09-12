@@ -1,17 +1,18 @@
 {
   "name": "college-athletics-volleyball-analytics",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:core": "rm -rf .core-dist && tsc -p tsconfig.core.json && node --test tests/core/*.test.mjs",
-    "test": "npm run test:core"
+    "test": "npm run test:core",
+    "verify": "npm test && npm run typecheck && npm run build"
   },
   "dependencies": {
     "@supabase/ssr": "0.12.7",
